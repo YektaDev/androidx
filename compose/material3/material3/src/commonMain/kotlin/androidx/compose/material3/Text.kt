@@ -115,6 +115,8 @@ fun Text(
         }
     }
 
+    val fixedLetterSpacing = rememberFixedLetterSpacing(text, letterSpacing, style.letterSpacing)
+
     BasicText(
         text,
         modifier,
@@ -127,7 +129,7 @@ fun Text(
             fontFamily = fontFamily,
             textDecoration = textDecoration,
             fontStyle = fontStyle,
-            letterSpacing = letterSpacing
+            letterSpacing = fixedLetterSpacing
         ),
         onTextLayout,
         overflow,
@@ -260,6 +262,8 @@ fun Text(
         }
     }
 
+    val fixedLetterSpacing = rememberFixedLetterSpacing(text.text, letterSpacing, style.letterSpacing)
+
     BasicText(
         text = text,
         modifier = modifier,
@@ -272,7 +276,7 @@ fun Text(
             fontFamily = fontFamily,
             textDecoration = textDecoration,
             fontStyle = fontStyle,
-            letterSpacing = letterSpacing
+            letterSpacing = fixedLetterSpacing
         ),
         onTextLayout = onTextLayout,
         overflow = overflow,
@@ -350,4 +354,63 @@ val LocalTextStyle = compositionLocalOf(structuralEqualityPolicy()) { DefaultTex
 fun ProvideTextStyle(value: TextStyle, content: @Composable () -> Unit) {
     val mergedStyle = LocalTextStyle.current.merge(value)
     CompositionLocalProvider(LocalTextStyle provides mergedStyle, content = content)
+}
+
+/**
+ * Letter spacing doesn't play well with cursive writing systems, as it can break the connection
+ * between letters and make the text fragmented. A simple and performant solution to this problem is
+ * to find the first "letter" character in the text (using `isLetter()`) and set `letterSpacing` to
+ * 0 if that character belongs to a cursive writing system and `letterSpacing` is bigger than 0.
+ */
+@Composable
+private fun rememberFixedLetterSpacing(
+    text: String,
+    letterSpacing: TextUnit,
+    styleLetterSpacing: TextUnit,
+) = remember(text, letterSpacing, styleLetterSpacing) {
+    when (letterSpacing.isSpecified) {
+        true -> {
+            when (letterSpacing.value == 0f) {
+                true -> letterSpacing
+                false -> if (text.isFirstLetterCursive()) 0f.sp else letterSpacing
+            }
+        }
+        false -> {
+            when (styleLetterSpacing.let { it.isUnspecified || it.value == 0f }) {
+                true -> TextUnit.Unspecified
+                false -> if (text.isFirstLetterCursive()) 0f.sp else styleLetterSpacing
+            }
+        }
+    }
+}
+
+/**
+ * Returns **`true`** if the first letter of the string belongs to a cursive writing system. A good
+ * example is the Persian language. Letter spacing doesn't play well with cursive writing systems,
+ * as it can break the connection between letters and make the text fragmented.
+ */
+@Stable
+private fun String.isFirstLetterCursive(): Boolean {
+    for (char in this) {
+        if (!char.isLetter()) continue
+        val c = char.code
+        if (c < 1536) return false
+        if (c < 1920) return true
+        if (c < 1984) return false
+        if (c < 2048) return true
+        if (c < 2144) return false
+        if (c < 2304) return true
+        if (c < 4096) return false
+        if (c < 4256) return true
+        if (c < 43488) return false
+        if (c < 43520) return true
+        if (c < 43616) return false
+        if (c < 43648) return true
+        if (c < 64336) return false
+        if (c < 65024) return true
+        if (c < 65136) return false
+        if (c < 65280) return true
+        return false
+    }
+    return false
 }
